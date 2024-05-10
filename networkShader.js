@@ -17,7 +17,7 @@ export function updateShader(width, height, nodes, links) {
     );
 
     const scene = new THREE.Scene();
-    const plane = new THREE.PlaneBufferGeometry(2, 2);
+    const plane = new THREE.PlaneGeometry(2, 2);
 
     const vertexShader = /* glsl */ `
                 varying vec3 vUv;
@@ -27,7 +27,7 @@ export function updateShader(width, height, nodes, links) {
     `
 
     const fragmentShader = /* glsl */ `
-                #define POINTS 3
+                #define POINTS 1
                 #define LINKS 490
                 #define COLORS 5
                 #define PI 3.1415
@@ -95,23 +95,30 @@ export function updateShader(width, height, nodes, links) {
                     return 1. - exp(-50.0*(d - 0.001))* 0.8;
                 }
 
+                // fisheye distortion
                 vec2 distort(vec2 pos, float radius, float intensity)
                 {
+                    // pos = 0.5 * (pos + 1.0);
+                    pos += 0.1;
                     float theta = atan(pos.y, pos.x);
                     radius = pow(radius, intensity);
                     pos.x = radius * cos(theta);
                     pos.y = radius * sin(theta);
 
-                    return 0.5 * (pos + 1.0);
+                    return pos;
+
+                    // return 0.5 * (pos + 1.0);
+                    // return 2. * pos - 1.0;
                 }
                 
                 void main() {
                     // Normalized pixel coordinates (from 0 to 1)
                     vec2 uv = gl_FragCoord.xy / u_resolution;
                     uv.x *= u_resolution.x / u_resolution.y;
+                    // uv = 0.5 * (uv + 1.);
 
                     // Seed for the position noise        
-                    vec2 seed = vec2(0.);
+                    vec2 seed = vec2(10.);
                     vec2 seedY = vec2(1.);
                 
                     vec3 colors[COLORS+1];
@@ -126,12 +133,12 @@ export function updateShader(width, height, nodes, links) {
                     // Centroids
                     vec2 points[POINTS];
                     for (int i = 0; i < POINTS; i++) {
-                        // points[i] = vec2(1.*noise(seed),map(float(i) / float(POINTS), 0., 1., 0., .915));
-                        // // points[i] = vec2(noise(seed), map(noise(seedY), 0., 1., 0., .7));
-                        // //   points[i] = vec2(random(vec2(seed.x), random(seed.y));
-                        // seed += .5;
-                        // seedY += .2;
-                        points[i] = vec2(u_nodes[i].xy);
+                        // points[i] = vec2(2.*noise(seed),float(i+1) / float(POINTS)); //map(float(i) / float(POINTS), 0., 1., 0., .915));
+                        points[i] = vec2(noise(seed), map(noise(seedY), 0., 1., 0., .7));
+                        //   points[i] = vec2(random(vec2(seed.x), random(seed.y));
+                        seed += .5;
+                        seedY += .2;
+                        // points[i] = vec2(u_nodes[i].xy);
                     }
 
                     // draw the network's links by computing distance to all lines
@@ -150,7 +157,7 @@ export function updateShader(width, height, nodes, links) {
                     // Distance, color rgb
                     vec4 m = vec4(8.0, 0.0, 0.0, 0.0);
                     // Rate of coagulation around the centroids (bigger value, less coagulation), smoothness
-                    float w = .8;
+                    float w = 10.;
                     // Size of the blob (bigger value, smaller blobs)
                     float blobSize = 10.;
                     // Seed for the color noise
@@ -169,7 +176,7 @@ export function updateShader(width, height, nodes, links) {
                     
                         vec3 col = 1. - colors[colorIdx]; // + 0.05 * vec3(random(vec2(seed.x, seed.y)), random(vec2(seed.x+0.03, seed.y+0.04)), random(vec2(seed.x+0.05, seed.y+0.03)));
                         float h = smoothstep(-1., 1., (m.x - d) / w);
-                        m.x = mix(m.x, d, h) - h * (1.0 - h) * w / (.1 + 3. * w);       // distance
+                        m.x = mix(m.x, d, h) - h * (1. - h) * w / (.1 + 3. * w);       // distance
                         m.yzw = mix(m.yzw, col, h) - h * (1.0 - h) * w / (.1 + 3. * w); // color
                     }
                     // same as adding the lines in the distance in loop above
@@ -195,7 +202,9 @@ export function updateShader(width, height, nodes, links) {
                     //                     smoothstep(rim, rim + thickness, m.x));
 
                     // use m.x as a radius for the fisheye distortion
-                    uv = distort(uv, m.x, -1.);
+                    ivec2 size = textureSize(u_texture, 0);
+                    uv.x *= float(size.y) / float(size.x);
+                    uv = distort(uv, m.x+(0.01*(noise(50.*uv)-0.5))+random(seed), -.45);
                     vec4 color = texture(u_texture, uv);
                     
                 
@@ -209,7 +218,7 @@ export function updateShader(width, height, nodes, links) {
                     // // {
                     //     //   Add grain
                     //     // color -= vec3(.25 * (noise(20.0*uv) - .5));
-                    //     color -= vec3(.1 * (random(uv) - .5));
+                        color.rgb -= vec3(.1 * (random(uv) - .5));
 
                     //     float alpha = smoothstep(.9, 0.4, color.r);
                     //     // alpha -= .55;
@@ -223,13 +232,13 @@ export function updateShader(width, height, nodes, links) {
                 `;
 
     let time = 0;
-    const texture = new THREE.TextureLoader().load("burningS.jpg");
+    const texture = new THREE.TextureLoader().load("img/burning.jpg");
 
     const uniforms = {
         u_resolution: { value: new THREE.Vector2(canvas.width, canvas.height) },
         u_time: { value: time },
-        u_nodes: { value: nodes },
-        u_links: { value: links },
+        // u_nodes: { value: nodes },
+        // u_links: { value: links },
         u_texture: { value: texture }
     };
 
@@ -246,6 +255,8 @@ export function updateShader(width, height, nodes, links) {
         uniforms.u_time.value = time;
 
         renderer.render(scene, camera);
+
+        requestAnimationFrame(render);
 
     }
 
