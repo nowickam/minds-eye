@@ -29,7 +29,7 @@ export function initShader(width, height, nodes, links) {
     `
 
     const fragmentShader = /* glsl */ `
-                #define POINTS 4
+                #define POINTS 6
                 #define PI 3.1415
 
                 uniform vec2 u_resolution;
@@ -69,131 +69,119 @@ export function initShader(width, height, nodes, links) {
                             (d - b) * u.x * u.y;
                 }
 
+                // GLSL textureless classic 2D noise "cnoise",
+                // with an RSL-style periodic variant "pnoise".
+                // Author:  Stefan Gustavson (stefan.gustavson@liu.se)
+                // Version: 2011-08-22
                 //
-// GLSL textureless classic 2D noise "cnoise",
-// with an RSL-style periodic variant "pnoise".
-// Author:  Stefan Gustavson (stefan.gustavson@liu.se)
-// Version: 2011-08-22
-//
-// Many thanks to Ian McEwan of Ashima Arts for the
-// ideas for permutation and gradient selection.
-//
-// Copyright (c) 2011 Stefan Gustavson. All rights reserved.
-// Distributed under the MIT license. See LICENSE file.
-// https://github.com/stegu/webgl-noise
-//
+                // Many thanks to Ian McEwan of Ashima Arts for the
+                // ideas for permutation and gradient selection.
+                //
+                // Copyright (c) 2011 Stefan Gustavson. All rights reserved.
+                // Distributed under the MIT license. See LICENSE file.
+                // https://github.com/stegu/webgl-noise
+                //
 
-vec4 mod289(vec4 x)
-{
-  return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
+                vec4 mod289(vec4 x)
+                {
+                return x - floor(x * (1.0 / 289.0)) * 289.0;
+                }
 
-vec4 permute(vec4 x)
-{
-  return mod289(((x*34.0)+10.0)*x);
-}
+                vec4 permute(vec4 x)
+                {
+                return mod289(((x*34.0)+10.0)*x);
+                }
 
-vec4 taylorInvSqrt(vec4 r)
-{
-  return 1.79284291400159 - 0.85373472095314 * r;
-}
+                vec4 taylorInvSqrt(vec4 r)
+                {
+                return 1.79284291400159 - 0.85373472095314 * r;
+                }
 
-vec2 fade(vec2 t) {
-  return t*t*t*(t*(t*6.0-15.0)+10.0);
-}
+                vec2 fade(vec2 t) {
+                return t*t*t*(t*(t*6.0-15.0)+10.0);
+                }
 
-// Classic Perlin noise
-float cnoise(vec2 P)
-{
-  vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
-  vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
-  Pi = mod289(Pi); // To avoid truncation effects in permutation
-  vec4 ix = Pi.xzxz;
-  vec4 iy = Pi.yyww;
-  vec4 fx = Pf.xzxz;
-  vec4 fy = Pf.yyww;
+                // Classic Perlin noise
+                float cnoise(vec2 P)
+                {
+                vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
+                vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
+                Pi = mod289(Pi); // To avoid truncation effects in permutation
+                vec4 ix = Pi.xzxz;
+                vec4 iy = Pi.yyww;
+                vec4 fx = Pf.xzxz;
+                vec4 fy = Pf.yyww;
 
-  vec4 i = permute(permute(ix) + iy);
+                vec4 i = permute(permute(ix) + iy);
 
-  vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
-  vec4 gy = abs(gx) - 0.5 ;
-  vec4 tx = floor(gx + 0.5);
-  gx = gx - tx;
+                vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
+                vec4 gy = abs(gx) - 0.5 ;
+                vec4 tx = floor(gx + 0.5);
+                gx = gx - tx;
 
-  vec2 g00 = vec2(gx.x,gy.x);
-  vec2 g10 = vec2(gx.y,gy.y);
-  vec2 g01 = vec2(gx.z,gy.z);
-  vec2 g11 = vec2(gx.w,gy.w);
+                vec2 g00 = vec2(gx.x,gy.x);
+                vec2 g10 = vec2(gx.y,gy.y);
+                vec2 g01 = vec2(gx.z,gy.z);
+                vec2 g11 = vec2(gx.w,gy.w);
 
-  vec4 norm = taylorInvSqrt(vec4(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11)));
-  g00 *= norm.x;  
-  g01 *= norm.y;  
-  g10 *= norm.z;  
-  g11 *= norm.w;  
+                vec4 norm = taylorInvSqrt(vec4(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11)));
+                g00 *= norm.x;  
+                g01 *= norm.y;  
+                g10 *= norm.z;  
+                g11 *= norm.w;  
 
-  float n00 = dot(g00, vec2(fx.x, fy.x));
-  float n10 = dot(g10, vec2(fx.y, fy.y));
-  float n01 = dot(g01, vec2(fx.z, fy.z));
-  float n11 = dot(g11, vec2(fx.w, fy.w));
+                float n00 = dot(g00, vec2(fx.x, fy.x));
+                float n10 = dot(g10, vec2(fx.y, fy.y));
+                float n01 = dot(g01, vec2(fx.z, fy.z));
+                float n11 = dot(g11, vec2(fx.w, fy.w));
 
-  vec2 fade_xy = fade(Pf.xy);
-  vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
-  float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
-  return 2.3 * n_xy;
-}
+                vec2 fade_xy = fade(Pf.xy);
+                vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
+                float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
+                return 2.3 * n_xy;
+                }
 
-// Classic Perlin noise, periodic variant
-float pnoise(vec2 P, vec2 rep)
-{
-  vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
-  vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
-  Pi = mod(Pi, rep.xyxy); // To create noise with explicit period
-  Pi = mod289(Pi);        // To avoid truncation effects in permutation
-  vec4 ix = Pi.xzxz;
-  vec4 iy = Pi.yyww;
-  vec4 fx = Pf.xzxz;
-  vec4 fy = Pf.yyww;
+                // Classic Perlin noise, periodic variant
+                float pnoise(vec2 P, vec2 rep)
+                {
+                vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
+                vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
+                Pi = mod(Pi, rep.xyxy); // To create noise with explicit period
+                Pi = mod289(Pi);        // To avoid truncation effects in permutation
+                vec4 ix = Pi.xzxz;
+                vec4 iy = Pi.yyww;
+                vec4 fx = Pf.xzxz;
+                vec4 fy = Pf.yyww;
 
-  vec4 i = permute(permute(ix) + iy);
+                vec4 i = permute(permute(ix) + iy);
 
-  vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
-  vec4 gy = abs(gx) - 0.5 ;
-  vec4 tx = floor(gx + 0.5);
-  gx = gx - tx;
+                vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
+                vec4 gy = abs(gx) - 0.5 ;
+                vec4 tx = floor(gx + 0.5);
+                gx = gx - tx;
 
-  vec2 g00 = vec2(gx.x,gy.x);
-  vec2 g10 = vec2(gx.y,gy.y);
-  vec2 g01 = vec2(gx.z,gy.z);
-  vec2 g11 = vec2(gx.w,gy.w);
+                vec2 g00 = vec2(gx.x,gy.x);
+                vec2 g10 = vec2(gx.y,gy.y);
+                vec2 g01 = vec2(gx.z,gy.z);
+                vec2 g11 = vec2(gx.w,gy.w);
 
-  vec4 norm = taylorInvSqrt(vec4(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11)));
-  g00 *= norm.x;  
-  g01 *= norm.y;  
-  g10 *= norm.z;  
-  g11 *= norm.w;  
+                vec4 norm = taylorInvSqrt(vec4(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11)));
+                g00 *= norm.x;  
+                g01 *= norm.y;  
+                g10 *= norm.z;  
+                g11 *= norm.w;  
 
-  float n00 = dot(g00, vec2(fx.x, fy.x));
-  float n10 = dot(g10, vec2(fx.y, fy.y));
-  float n01 = dot(g01, vec2(fx.z, fy.z));
-  float n11 = dot(g11, vec2(fx.w, fy.w));
+                float n00 = dot(g00, vec2(fx.x, fy.x));
+                float n10 = dot(g10, vec2(fx.y, fy.y));
+                float n01 = dot(g01, vec2(fx.z, fy.z));
+                float n11 = dot(g11, vec2(fx.w, fy.w));
 
-  vec2 fade_xy = fade(Pf.xy);
-  vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
-  float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
-  return 2.3 * n_xy;
-}
+                vec2 fade_xy = fade(Pf.xy);
+                vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
+                float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
+                return 2.3 * n_xy;
+                }
 
-
-                // float smoothNoise(vec2 uv){
-                //     float f = noise( 32.0*uv );
-                //     mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
-                //     f  = 0.5000*noise( uv ); uv = m*uv;
-                //     f += 0.2500*noise( uv ); uv = m*uv;
-                //     f += 0.1250*noise( uv ); uv = m*uv;
-                //     f += 0.0625*noise( uv ); uv = m*uv;
-
-                //     return f;
-                // }
 
                 float map(float value, float min1, float max1, float min2, float max2) {
                     return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
@@ -204,6 +192,7 @@ float pnoise(vec2 P, vec2 rep)
                 {
                     // pos = 0.5 * (pos + 1.0);
                     // pos += 0.1;
+
                     vec2 pos = point - center;
                     float theta = atan(pos.y, pos.x);
                     // float theta = atan(pos.y, pos.x);
@@ -249,10 +238,10 @@ float pnoise(vec2 P, vec2 rep)
                     // Centroids
                     vec2 points[POINTS];
                     for (int i = 0; i < POINTS; i++) {
-                        points[i] = vec2(0.5+0.8*(random(seed)-0.5), 0.5+0.8*(random(seedY)-0.5));
-                        // points[i] = vec2((random(seed)-0.5), (random(seedY)-0.5));
+                        // points[i] = vec2(0.5+1.*(random(seed)-0.5), 0.5+1.*(random(seedY)-0.5));
+                        points[i] = vec2((random(seed)), (random(seedY)));
                         // points[i] = vec2(u_nodes[i].xy);
-                        seed += 2.;
+                        seed += .4;
                         seedY += .3;
                     }
                 
@@ -269,9 +258,9 @@ float pnoise(vec2 P, vec2 rep)
                     vec4 m = vec4(0.1, center, 0.0);
 
                     // Rate of coagulation around the centroids (bigger value, less coagulation), smoothness
-                    float w = 4.;
+                    float w = 4.5;
                     // Size of the blob (bigger value, smaller blobs)
-                    float blobSize = 20.;
+                    float blobSize = 18.;
 
                     for (int i = 0; i < POINTS; i++) {
                         // Distance squared (not sure why, eliminate negative?)
@@ -290,9 +279,9 @@ float pnoise(vec2 P, vec2 rep)
                     // Where the edge is
                     float rim = .5;
                     // Thickness of the edge
-                    float thickness = 0.1;
+                    float thickness = 0.3;
                     // Intensity of the color of the edg
-                    float intensity = 0.;
+                    float intensity = 0.3;
                 
                     minDistFlat -= intensity * (smoothstep(rim - thickness, rim, m.x) -
                                                 smoothstep(rim, rim + thickness, m.x));
@@ -324,66 +313,52 @@ float pnoise(vec2 P, vec2 rep)
                         if(color.r > 0. )
                         {
 
-                            vec2 uvDist = distort(uv, m.x+0.1*cnoise(uv*5.), -.7, m.yz);
-                            vec3 colorDist = mix(texture(u_texture1, uvDist, -100.).rgb, texture(u_texture1, uv, -100.).rgb, smoothstep(1., -1., m.x*5.));
+                            vec2 uvDist = distort(uv*1.5-0.25, m.x+0.2*cnoise(uv*5.), -.5, m.yz);
+                            // vec3 colorDist = mix(texture(u_texture1, uvDist, -100.).rgb, texture(u_texture1, uv, -100.).rgb, smoothstep(-1., 1., m.x*1.));
+                            vec3 colorDist = texture(u_texture1, uvDist, -100.).rgb;
+
 
                             vec3 colorNorm = texture(u_texture1, uv, -100.).rgb;// * pow(colorDist+0.5, vec3(1.0));
 
                             float Threshold = u_luminosity;
-                            float Intensity = 4.0;
-                            float BlurSize = 5.0;
+                            float Intensity = 3.5;
+                            float BlurSize = 5.5;
                                 
                                 
-                            vec3 Highlight = clamp(blur(uv, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
+                            vec3 Highlight = clamp(blur(uvDist, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
                                 
                             colorNorm = blur(uv, 0.1);
-                            colorNorm = 1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity); //Screen Blend Mode
+                            // colorNorm = mix(1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity), colorNorm,0.3*(0.2126*color.r+0.7152 *color.g+0.0722 * color.b)) ; //Screen Blend Mode
+                            colorNorm = 1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity) ; //Screen Blend Mode
                             
 
                             Threshold = u_luminosity*1.5;
                             Intensity = 2.0;
-                            BlurSize = 3.0;
+                            BlurSize =2.0;
                                 
                                 
                             vec3 Highlight1 = clamp(blur(uv, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
                             vec3 Highlight2 = clamp(blur(uvDist, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
                             Highlight = max(Highlight1, Highlight2);
+                            // Highlight =  Highlight2;
                                 
                             colorDist = blur(uvDist, .5);
-                            colorDist = 1.0-(1.0-colorDist)*(1.0-Highlight*Intensity);//Screen Blend Mode
+                            colorDist = 1.0-(1.0-colorDist)*(1.0-Highlight*Intensity);
 
                             color = mix(colorDist, colorNorm, smoothstep(.45, 0.55 , m.x));
-
+                            color = clamp(color, 0.0, 1.0);
+                            
                         }
 
                     }
                     
+                    // color = mix(color, vec3(u_luminosity), 0.1*(color.r+color.g+color.b)/3.0);
                     color -= vec3(.1 * (random(uv) - .5));
+                    
                     gl_FragColor = vec4(vec3(color), 1.0);
                     
                 }
                 `;
-
-    // let data = objects.filter((d) => {
-    //     if (d.classifications.length > 0 && d.classifications[0].en === "painting") {
-    //         let result = true;
-    //         // result = d.keywords.filter((d) => {
-    //         //     if (d.en === "Kalevala") {
-    //         //         return true;
-    //         //     }
-    //         //     return false;
-    //         // }).length > 0 ? true : false;
-    //         return result;
-
-    //     }
-    //     return false;
-    // });
-
-    // let idx = Math.floor(Math.random() * data.length);
-    // console.log(data[idx])
-    // let url = data[idx].multimedia[0].jpg['2000'];
-
-    // console.log(data)
 
     function getBrightness(texture) {
         if (texture) {
@@ -396,7 +371,7 @@ float pnoise(vec2 P, vec2 rep)
             let sum = 0;
             for (let i = 0; i < imageData.data.length; i += 4) {
                 // luminosity
-                sum += 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
+                sum += 0.2126 * imageData.data[i] + 0.7152 * imageData.data[i + 1] + 0.0722 * imageData.data[i + 2];
                 // sum += (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
             }
             const luminosity = sum / (canvas2.width * canvas2.height) / 255;
@@ -416,12 +391,17 @@ float pnoise(vec2 P, vec2 rep)
         fps++;
         renderer.render(scene, camera);
 
-        requestAnimationFrame(render);
+        // requestAnimationFrame(render);
 
     }
 
-    const IMG_N = 75;
-    let imageName = `img/img${Math.floor(Math.random() * IMG_N + 1)}.jpg`
+    const IMG_N = 51;
+    let imageName = `img/img${Math.floor(hl.random() * IMG_N + 1)}.jpg`
+    // imageName = `img/img${66}.jpg`
+
+    let seeds = [
+
+    ]
 
     // const texture = new THREE.TextureLoader().load(url);
     const loader = new THREE.TextureLoader()
@@ -436,7 +416,7 @@ float pnoise(vec2 P, vec2 rep)
                 u_nodes: { value: nodes },
                 u_texture1: { value: texture },
                 u_luminosity: { value: lum },
-                u_seed: { value: new THREE.Vector2(Math.random(), Math.random()) }
+                u_seed: { value: new THREE.Vector2(hl.random(), hl.random()) }
             };
 
             const material = new THREE.ShaderMaterial({
