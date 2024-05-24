@@ -1,13 +1,8 @@
 let uniforms = {};
 
-export function initShader(width, height, nodes, links) {
-    const canvas = document.getElementById('c');
-    canvas.width = width;
-    canvas.height = height;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas, alpha: true });
-    renderer.setClearColor(0x000000, 0);
-    renderer.setSize(width, height)
+export function initShader() {
+    let width = window.innerWidth;
+    let height = window.innerHeight;
 
     const camera = new THREE.OrthographicCamera(
         -1, // left
@@ -34,7 +29,6 @@ export function initShader(width, height, nodes, links) {
 
                 uniform vec2 u_resolution;
                 uniform float u_time;
-                uniform vec4 u_nodes[POINTS];
                 uniform vec2 u_seed;
 
                 uniform sampler2D u_texture1;
@@ -223,10 +217,12 @@ export function initShader(width, height, nodes, links) {
                     // Normalized pixel coordinates (from 0 to 1)
                     vec2 uv = gl_FragCoord.xy / u_resolution;
                     // uv = 2.0 * uv - 1.0;
-                    uv.x *= u_resolution.x / u_resolution.y;
                     // uv = 0.5 * (uv + 1.);
+                    uv.x *= u_resolution.x / u_resolution.y;
+                    // uv.x -= 0.5;
                     ivec2 size = textureSize(u_texture1, 0);
                     uv.x *= float(size.y) / float(size.x);
+                    uv.x-=0.1;
 
 
                     // Seed for the position noise        
@@ -239,8 +235,7 @@ export function initShader(width, height, nodes, links) {
                     vec2 points[POINTS];
                     for (int i = 0; i < POINTS; i++) {
                         // points[i] = vec2(0.5+1.*(random(seed)-0.5), 0.5+1.*(random(seedY)-0.5));
-                        points[i] = vec2((random(seed)), (random(seedY)));
-                        // points[i] = vec2(u_nodes[i].xy);
+                        points[i] = vec2((random(seed))*1.2-0.1, (random(seedY))*1.2-0.1);
                         seed += .4;
                         seedY += .3;
                     }
@@ -270,10 +265,6 @@ export function initShader(width, height, nodes, links) {
                         m.x = mix(m.x, d, h) - h * (1. - h) * w / (.1 + 3. * w);       // distance
                         m.yz = mix(m.yz, points[i], h);// - h * (1.0 - h) * w / (.1 + 3. * w); // color
                     }
-
-                    // Step gradient; 100/100 clean; 80/100 dirty
-                    float n = noise(uv*80.);
-                    float minDistFlat = floor((m.x) * 10. ) / 10.;
                 
                     // Edge around
                     // Where the edge is
@@ -282,11 +273,7 @@ export function initShader(width, height, nodes, links) {
                     float thickness = 0.3;
                     // Intensity of the color of the edg
                     float intensity = 0.3;
-                
-                    minDistFlat -= intensity * (smoothstep(rim - thickness, rim, m.x) -
-                                                smoothstep(rim, rim + thickness, m.x));
-                    minDistFlat -= 0.05 * (smoothstep(0. - thickness, 0., m.x) -
-                                        smoothstep(0., 0. + thickness, m.x));
+
                 
                     m.x -= intensity * (smoothstep(rim - thickness, rim, m.x) -
                                         smoothstep(rim, rim + thickness, m.x));
@@ -309,7 +296,7 @@ export function initShader(width, height, nodes, links) {
                     // use m.x as a radius for the fisheye distortion
 
 
-                    if(uv.x <= 1.){
+                    // if(uv.x <= 10.){
                         if(color.r > 0. )
                         {
 
@@ -334,7 +321,7 @@ export function initShader(width, height, nodes, links) {
 
                             Threshold = u_luminosity*1.5;
                             Intensity = 2.0;
-                            BlurSize =2.0;
+                            BlurSize =2.5;
                                 
                                 
                             vec3 Highlight1 = clamp(blur(uv, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
@@ -348,12 +335,13 @@ export function initShader(width, height, nodes, links) {
                             color = mix(colorDist, colorNorm, smoothstep(.45, 0.55 , m.x));
                             color = clamp(color, 0.0, 1.0);
                             
+                    // color = mix(color, colorDist, 0.1*(color.r+color.g+color.b)/3.0);
                         }
 
-                    }
+                    // }
                     
-                    // color = mix(color, vec3(u_luminosity), 0.1*(color.r+color.g+color.b)/3.0);
                     color -= vec3(.1 * (random(uv) - .5));
+                    // color = texture(u_texture1, uv, -100.).rgb;
                     
                     gl_FragColor = vec4(vec3(color), 1.0);
                     
@@ -380,6 +368,17 @@ export function initShader(width, height, nodes, links) {
         return 0;
     }
 
+    window.addEventListener('resize', () => {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = 1.2 * height * texture.image.width / texture.image.height;
+        canvas.height = height;
+        uniforms.u_resolution = { value: new THREE.Vector2(canvas.width, canvas.height) };
+        renderer.setSize(canvas.width, canvas.height);
+        camera.aspect = canvas.width / canvas.height;
+        camera.updateProjectionMatrix();
+    })
+
     let time = 0;
     let fps = 1;
 
@@ -391,32 +390,92 @@ export function initShader(width, height, nodes, links) {
         fps++;
         renderer.render(scene, camera);
 
-        // requestAnimationFrame(render);
+        requestAnimationFrame(render);
 
     }
 
     const IMG_N = 51;
     let imageName = `img/img${Math.floor(hl.random() * IMG_N + 1)}.jpg`
-    // imageName = `img/img${66}.jpg`
+    imageName = `img/img${38}.jpg`
 
     let seeds = [
+        [[0.32833285885863006, 0.3980765307787806]],
+        [[0.6560636973008513, 0.6795940012671053]],
+        [[0.4603170494083315, 0.1462087614927441]],
+        [[0.7136805006302893, 0.889012842439115]],
+        [[0.4455257677473128, 0.8643815747927874], [0.8935900400392711, 0.7698066832963377], [0.6723987879231572, 0.7496828695293516]],
+        [[0.6504754186607897, 0.3105948055163026]],
+        [[0.9206518873106688, 0.2971764684189111]],
+        [[0.6367945852689445, 0.9686689290683717]],
+        [[0.20646945713087916, 0.046951690223068]],
+        [[0.7459108619950712, 0.2499065848533064]],
 
+        [[0.6102684233337641, 0.2223469358868897]],
+        [[0.03959637600928545, 0.6545476319734007]],
+        [[0.7297876577358693, 0.770167127950117]],
+        [[0.8053254645783454, 0.3387450883165002]],
+        [[0.9467454061377794, 0.46340903523378074]],
+        [[0.15432445984333754, 0.5587997930124402]],
+        [[0.13780235615558922, 0.5260033940430731], [0.929628181271255, 0.18819714803248644], [0.8732511887792498, 0.08234454784542322], [0.9221269642002881, 0.7856447824742645]],
+        [[0.4080328890122473, 0.8444403710309416]],
+        [[0.09863330004736781, 0.06985626136884093]],
+        [[0.23168507358059287, 0.915900404099375], [0.6567997243255377, 0.9400627431459725], [0.4453931571915746, 0.7728357678279281], [0.9910944551229477, 0.06321941502392292]],
+
+        [[0.3905261140316725, 0.9255560406018049], [0.09156488231383264, 0.7508494099602103], [0.45258949673734605, 0.36822941852733493]],
+        [[0.38095642114058137, 0.7180565698072314], [0.05570291820913553, 0.9796031159348786], [0.5941416684072465, 0.03396701882593334], [0.7043316345661879, 0.4128245492465794]],
+        [[0.15793349430896342, 0.5850203726440668], [0.8508140619378537, 0.6796099622733891]],
+        [[0.8728919099085033, 0.8350159963592887]],
+        [[0.5830538056325167, 0.5685245105996728], [0.29165214439854026, 0.6846181869041175], [0.23551287618465722, 0.135543443961069]],
+        [[0.25018332130275667, 0.48613209929317236], [0.32339573884382844, 0.4929889449849725], [0.06736665801145136, 0.5977626862004399]],
+        [[0.26043068221770227, 0.6401022612117231]],
+        [[0.6093976201955229, 0.999974072445184], [0.33447549119591713, 0.07704461249522865]],
+        [[0.905816690530628, 0.034705331549048424]],
+        [[0.8955499497242272, 0.4722629035823047]],
+
+        [[0.027022669790312648, 0.14500897307880223]],
+        [[0.7128256079740822, 0.8320034267380834], [0.9667332649696618, 0.7866610293276608], [0.08441861858591437, 0.7587458465714008]],
+        [[0.9309994191862643, 0.12647131085395813], [0.4701669348869473, 0.28679443639703095]],
+        [[0.13007081346586347, 0.11585103115066886], [0.12131857452914119, 0.15753548918291926], [0.8258043632376939, 0.28820256725884974]],
+        [[0.8286232121754438, 0.6273797696921974], [0.7451640169601887, 0.8350478827487677]],
+        [[0.8708352393005043, 0.9345545871183276]],
+        [[0.31596386968158185, 0.5205329649616033]]
     ]
+
+    let canvas, renderer, texture;
 
     // const texture = new THREE.TextureLoader().load(url);
     const loader = new THREE.TextureLoader()
     loader.load(
         // url,
         imageName,
-        function (texture) {
+        function (loadedTexture) {
+            texture = loadedTexture;
+            canvas = document.getElementById('c');
+            canvas.width = 1.2 * height * texture.image.width / texture.image.height;
+            canvas.height = height;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas, alpha: true });
+            renderer.setClearColor(0x000000, 0);
+            renderer.setSize(canvas.width, canvas.height)
+
+            camera.aspect = canvas.width / canvas.height;
+
+            let x = [hl.random(), hl.random()];
+            // x = [0.5376791656017303, 0.9474644656293094]
+            // x = [0.31596386968158185, 0.5205329649616033]
+            // x = [0.48809592821635306, 0.6647808677516878]
+            // x = [0.8258043632376939, 0.28820256725884974]
+
+            console.log(`[${x[0]}, ${x[1]}]`);
+
             let lum = getBrightness(texture);
             uniforms = {
                 u_resolution: { value: new THREE.Vector2(canvas.width, canvas.height) },
                 u_time: { value: time },
-                u_nodes: { value: nodes },
                 u_texture1: { value: texture },
                 u_luminosity: { value: lum },
-                u_seed: { value: new THREE.Vector2(hl.random(), hl.random()) }
+                // u_seed: { value: new THREE.Vector2(seeds[8][0][0], seeds[8][0][1]) }
+                u_seed: { value: new THREE.Vector2(x[0], x[1]) }
             };
 
             const material = new THREE.ShaderMaterial({
@@ -432,8 +491,4 @@ export function initShader(width, height, nodes, links) {
 
 }
 
-export function updateShader(nodes, links) {
-    if (uniforms.u_nodes)
-        uniforms.u_nodes.value = nodes;
-
-}
+initShader();
