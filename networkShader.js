@@ -31,9 +31,11 @@ export function initShader() {
                 uniform float u_time;
                 uniform vec2 u_seed;
 
-                uniform sampler2D u_texture1;
-                uniform sampler2D u_texture2;
+                uniform sampler2D u_texture;
+                uniform sampler2D u_textureCoord;
                 uniform float u_luminosity;
+
+                uniform vec2 u_points[POINTS];
                 
                 float random(vec2 co) {
                     return fract(sin((mod(dot(co, vec2(12.9898, 78.233)), 2.*PI))) * 43758.5453);
@@ -206,7 +208,7 @@ export function initShader() {
                     vec2 offset = vec2(1.0) / u_resolution;
                     for (int i = -1; i <= 1; i++) {
                         for (int j = -1; j <= 1; j++) {
-                            color += texture(u_texture1, uv + vec2(i, j) * offset, size).rgb;
+                            color += texture(u_texture, uv + vec2(i, j) * offset, size).rgb;
                         }
                     }
                     return color / 9.0;
@@ -220,7 +222,7 @@ export function initShader() {
                     // uv = 0.5 * (uv + 1.);
                     uv.x *= u_resolution.x / u_resolution.y;
                     // uv.x -= 0.5;
-                    ivec2 size = textureSize(u_texture1, 0);
+                    ivec2 size = textureSize(u_texture, 0);
                     uv.x *= float(size.y) / float(size.x);
                     uv.x-=0.1;
 
@@ -235,10 +237,16 @@ export function initShader() {
                     vec2 points[POINTS];
                     for (int i = 0; i < POINTS; i++) {
                         // points[i] = vec2(0.5+1.*(random(seed)-0.5), 0.5+1.*(random(seedY)-0.5));
+                        // points[i] = vec2(0.1*float(i), 0.1*float(i));
+                        // points[i] = u_points[i];
                         points[i] = vec2((random(seed))*1.2-0.1, (random(seedY))*1.2-0.1);
-                        seed += .4;
-                        seedY += .3;
+                        // points[i] = texture(u_textureCoord, vec2(float(i)/float(POINTS), 0.)).rg;
+                        seed += vec2(.4);
+                        seedY += vec2(.3);
                     }
+
+
+                    
                 
                     // https://www.shadertoy.com/view/ldB3zc
                     // Worley noise with antialiasing (take distance to all centroids proportionally, i think)
@@ -301,11 +309,11 @@ export function initShader() {
                         {
 
                             vec2 uvDist = distort(uv*1.5-0.25, m.x+0.2*cnoise(uv*5.), -.5, m.yz);
-                            // vec3 colorDist = mix(texture(u_texture1, uvDist, -100.).rgb, texture(u_texture1, uv, -100.).rgb, smoothstep(-1., 1., m.x*1.));
-                            vec3 colorDist = texture(u_texture1, uvDist, -100.).rgb;
+                            // vec3 colorDist = mix(texture(u_texture, uvDist, -100.).rgb, texture(u_texture, uv, -100.).rgb, smoothstep(-1., 1., m.x*1.));
+                            vec3 colorDist = texture(u_texture, uvDist, -100.).rgb;
 
 
-                            vec3 colorNorm = texture(u_texture1, uv, -100.).rgb;// * pow(colorDist+0.5, vec3(1.0));
+                            vec3 colorNorm = texture(u_texture, uv, -100.).rgb;// * pow(colorDist+0.5, vec3(1.0));
 
                             float Threshold = u_luminosity;
                             float Intensity = 3.5;
@@ -314,7 +322,7 @@ export function initShader() {
                                 
                             vec3 Highlight = clamp(blur(uvDist, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
                                 
-                            colorNorm = blur(uv, 0.1);
+                            colorNorm = blur(uv, 0.5);
                             // colorNorm = mix(1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity), colorNorm,0.3*(0.2126*color.r+0.7152 *color.g+0.0722 * color.b)) ; //Screen Blend Mode
                             colorNorm = 1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity) ; //Screen Blend Mode
                             
@@ -329,7 +337,7 @@ export function initShader() {
                             Highlight = max(Highlight1, Highlight2);
                             // Highlight =  Highlight2;
                                 
-                            colorDist = blur(uvDist, .5);
+                            colorDist = blur(uvDist, 1.);
                             colorDist = 1.0-(1.0-colorDist)*(1.0-Highlight*Intensity);
 
                             color = mix(colorDist, colorNorm, smoothstep(.45, 0.55 , m.x));
@@ -340,10 +348,10 @@ export function initShader() {
 
                     // }
                     
-                    color -= vec3(.1 * (random(uv) - .5));
-                    // color = texture(u_texture1, uv, -100.).rgb;
+                    color -= vec3(.1 * (random(floor(2000000.*uv/u_resolution.y)) - .5));
+                    // color = texture(u_texture, uv, -100.).rgb;
                     
-                    gl_FragColor = vec4(vec3(color), 1.0);
+                    gl_FragColor = vec4(color, 1.0);
                     
                 }
                 `;
@@ -380,23 +388,21 @@ export function initShader() {
     })
 
     let time = 0;
-    let fps = 1;
+    let canvas, renderer, texture;
 
     function render(time) {
-        if (fps === 1) {
-            uniforms.u_time.value = -time / 10000;
-            fps = 0;
-        }
-        fps++;
         renderer.render(scene, camera);
+        hl.token.capturePreview();
 
         requestAnimationFrame(render);
-
     }
 
     const IMG_N = 50;
     let imageIdx = Math.floor(hl.random() * IMG_N);
+    // imageIdx = 1
     let imageName = `img/img${imageIdx + 1}.jpg`
+    let imageCoordName = `imgCoord/imgCoord${imageIdx + 1}.png`
+
 
     let seeds = [
         [[0.32833285885863006, 0.3980765307787806]],
@@ -456,56 +462,56 @@ export function initShader() {
 
     ]
 
-    let canvas, renderer, texture;
 
     // const texture = new THREE.TextureLoader().load(url);
+
+
     const loader = new THREE.TextureLoader()
+    console.log(hl.context)
+
     loader.load(
         // url,
         imageName,
         function (loadedTexture) {
-            texture = loadedTexture;
-            canvas = document.getElementById('c');
-            canvas.width = 1.2 * height * texture.image.width / texture.image.height;
-            canvas.height = height;
+            loader.load(
+                imageCoordName,
+                function (textureCoord) {
+                    texture = loadedTexture;
+                    console.log(window.innerHeight)
+                    canvas = document.getElementById('c');
+                    canvas.width = 1.2 * height * texture.image.width / texture.image.height;
+                    canvas.height = height;
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas, alpha: true });
-            renderer.setClearColor(0x000000, 0);
-            renderer.setSize(canvas.width, canvas.height)
+                    renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas, alpha: true, precision: "highp" });
+                    renderer.setClearColor(0x000000, 0);
+                    renderer.setSize(canvas.width, canvas.height)
 
-            camera.aspect = canvas.width / canvas.height;
+                    camera.aspect = canvas.width / canvas.height;
+                    let seedImgVar = Math.floor(hl.random() * seeds[imageIdx].length);
+                    seedImgVar = 0;
+                    let seed = seeds[imageIdx][seedImgVar].slice()
 
-            let x = [hl.random(), hl.random()];
-            // x = [0.2632124174851924, 0.7914227228611708]
-            // x = [0.8929720823653042, 0.35033005732111633]
-            // x = [0.7200877321884036, 0.47850534319877625]
-            // x = [0.3145054872147739, 0.5472655447665602]
+                    let lum = getBrightness(texture);
+                    uniforms = {
+                        u_resolution: { value: new THREE.Vector2(canvas.width, canvas.height) },
+                        u_time: { value: time },
+                        u_texture: { value: texture },
+                        u_luminosity: { value: lum },
+                        u_seed: { value: new THREE.Vector2(seeds[imageIdx][seedImgVar][0], seeds[imageIdx][seedImgVar][1]) },
+                        u_textureCoord: { value: textureCoord },
+                    };
 
-            // console.log(`[${x[0]}, ${x[1]}]`);
-
-            let seedImgVar = Math.floor(hl.random() * seeds[imageIdx].length);
-
-            let lum = getBrightness(texture);
-            uniforms = {
-                u_resolution: { value: new THREE.Vector2(canvas.width, canvas.height) },
-                u_time: { value: time },
-                u_texture1: { value: texture },
-                u_luminosity: { value: lum },
-                u_seed: { value: new THREE.Vector2(seeds[imageIdx][seedImgVar][0], seeds[imageIdx][seedImgVar][1]) }
-                // u_seed: { value: new THREE.Vector2(x[0], x[1]) }
-            };
-
-            const material = new THREE.ShaderMaterial({
-                vertexShader: vertexShader,
-                fragmentShader: fragmentShader,
-                uniforms: uniforms,
-                transparent: true,
-            });
-            scene.add(new THREE.Mesh(plane, material));
-            requestAnimationFrame(render);
-        }
-    );
-
+                    const material = new THREE.ShaderMaterial({
+                        vertexShader: vertexShader,
+                        fragmentShader: fragmentShader,
+                        uniforms: uniforms,
+                        transparent: true,
+                    });
+                    scene.add(new THREE.Mesh(plane, material));
+                    requestAnimationFrame(render);
+                }
+            );
+        })
 }
 
 initShader();
