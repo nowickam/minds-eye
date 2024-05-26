@@ -239,8 +239,8 @@ export function initShader() {
                         // points[i] = vec2(0.5+1.*(random(seed)-0.5), 0.5+1.*(random(seedY)-0.5));
                         // points[i] = vec2(0.1*float(i), 0.1*float(i));
                         // points[i] = u_points[i];
-                        points[i] = vec2((random(seed))*1.2-0.1, (random(seedY))*1.2-0.1);
-                        // points[i] = texture(u_textureCoord, vec2(float(i)/float(POINTS), 0.)).rg;
+                        // points[i] = vec2((random(seed))*1.2-0.1, (random(seedY))*1.2-0.1);
+                        points[i] = texture(u_textureCoord, vec2((float(i)+0.5)/float(POINTS),0.1)).rg;
                         seed += vec2(.4);
                         seedY += vec2(.3);
                     }
@@ -338,18 +338,24 @@ export function initShader() {
                             // Highlight =  Highlight2;
                                 
                             colorDist = blur(uvDist, 1.);
+                            const vec2 lensRadius 	= vec2(1.1, 0.05);
+                            float dist = distance(uv.xy, vec2(0.5,0.5));
+                            // color -= dist;
+                            float vigfin = 1. - pow(1.-smoothstep(lensRadius.x, lensRadius.y, dist),1.5);
+                            colorDist = mix(colorDist, blur(uvDist, (1.-vigfin)*10.), 4.*(1.-vigfin));
                             colorDist = 1.0-(1.0-colorDist)*(1.0-Highlight*Intensity);
 
                             color = mix(colorDist, colorNorm, smoothstep(.45, 0.55 , m.x));
                             color = clamp(color, 0.0, 1.0);
                             
                     // color = mix(color, colorDist, 0.1*(color.r+color.g+color.b)/3.0);
-                        }
+                        
 
                     // }
-                    
+                    // color -= (1.-vigfin);
                     color -= vec3(.1 * (random(floor(2000000.*uv/u_resolution.y)) - .5));
                     // color = texture(u_texture, uv, -100.).rgb;
+                        }
                     
                     gl_FragColor = vec4(color, 1.0);
                     
@@ -376,16 +382,34 @@ export function initShader() {
         return 0;
     }
 
-    window.addEventListener('resize', () => {
+    window.addEventListener('resize', () => setSize)
+
+    function setSize() {
         width = window.innerWidth;
         height = window.innerHeight;
-        canvas.width = 1.2 * height * texture.image.width / texture.image.height;
-        canvas.height = height;
+
+        if (hl.context.isPreview) {
+            canvas.width = 1.2 * height * texture.image.width / texture.image.height;
+            canvas.height = height;
+        }
+        else {
+            if (texture.image.width > texture.image.height) {
+                canvas.width = height;
+                canvas.height = height;
+            }
+            else {
+                canvas.width = height;
+                canvas.height = height;
+
+            }
+        }
         uniforms.u_resolution = { value: new THREE.Vector2(canvas.width, canvas.height) };
+        console.log(uniforms.u_resolution.value)
         renderer.setSize(canvas.width, canvas.height);
         camera.aspect = canvas.width / canvas.height;
         camera.updateProjectionMatrix();
-    })
+
+    }
 
     let time = 0;
     let canvas, renderer, texture;
@@ -399,7 +423,7 @@ export function initShader() {
 
     const IMG_N = 50;
     let imageIdx = Math.floor(hl.random() * IMG_N);
-    // imageIdx = 1
+    // imageIdx = 1;
     let imageName = `img/img${imageIdx + 1}.jpg`
     let imageCoordName = `imgCoord/imgCoord${imageIdx + 1}.png`
 
@@ -463,11 +487,9 @@ export function initShader() {
     ]
 
 
-    // const texture = new THREE.TextureLoader().load(url);
-
-
     const loader = new THREE.TextureLoader()
-    console.log(hl.context)
+
+
 
     loader.load(
         // url,
@@ -477,16 +499,14 @@ export function initShader() {
                 imageCoordName,
                 function (textureCoord) {
                     texture = loadedTexture;
-                    console.log(window.innerHeight)
                     canvas = document.getElementById('c');
-                    canvas.width = 1.2 * height * texture.image.width / texture.image.height;
-                    canvas.height = height;
+
 
                     renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas, alpha: true, precision: "highp" });
                     renderer.setClearColor(0x000000, 0);
-                    renderer.setSize(canvas.width, canvas.height)
 
-                    camera.aspect = canvas.width / canvas.height;
+                    setSize();
+
                     let seedImgVar = Math.floor(hl.random() * seeds[imageIdx].length);
                     seedImgVar = 0;
                     let seed = seeds[imageIdx][seedImgVar].slice()
