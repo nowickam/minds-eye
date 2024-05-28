@@ -27,6 +27,8 @@ export function initShader() {
                 #define POINTS 6
                 #define PI 3.1415
 
+                #define rt vec2(-0.2,0.4)
+
                 uniform vec2 u_resolution;
                 uniform float u_time;
                 uniform vec2 u_seed;
@@ -36,6 +38,14 @@ export function initShader() {
                 uniform float u_luminosity;
 
                 uniform vec2 u_points[POINTS];
+                uniform float u_offset;
+
+                uniform float u_imgCoordRow;
+                uniform float u_imgCoordN;
+
+                uniform bool u_square;
+
+                
                 
                 float random(vec2 co) {
                     return fract(sin((mod(dot(co, vec2(12.9898, 78.233)), 2.*PI))) * 43758.5453);
@@ -221,10 +231,39 @@ export function initShader() {
                     // uv = 2.0 * uv - 1.0;
                     // uv = 0.5 * (uv + 1.);
                     uv.x *= u_resolution.x / u_resolution.y;
+
+                    // float dist = distance(uv.xy , vec2(0.5,0.5));
+                    float dist = 0.;
+                    float vt = smoothstep(1.0-rt.x, 1.0-rt.y,uv.y);    
+                    float vb = smoothstep(rt.x, rt.y,uv.y);
+                    float vl = smoothstep(rt.x,rt.y,uv.x);    
+                    float vr = smoothstep(1.0-rt.x, 1.0-rt.y,uv.x);
+
+                    dist = 1.-(vt*vb*vl*vr);
+                    dist *= 0.75;
+
                     // uv.x -= 0.5;
                     ivec2 size = textureSize(u_texture, 0);
                     uv.x *= float(size.y) / float(size.x);
-                    uv.x-=0.1;
+                    
+                    if(float(size.y) > float(size.x) && u_square){
+                        uv.x += (1.-float(size.y) / float(size.x)) / 2.0;
+                    }
+                    else if(u_square){
+                        uv.x += (float(size.x) / float(size.y) - 1.) / 2.0;
+                    }
+                    else{
+                        uv.x-=0.1;
+                        vt = smoothstep(1.0-rt.x, 1.0-rt.y,uv.y);    
+                        vb = smoothstep(rt.x, rt.y,uv.y);
+                        vl = smoothstep(rt.x,rt.y,uv.x);    
+                        vr = smoothstep(1.0-rt.x, 1.0-rt.y,uv.x);
+
+                        dist = 1.-(vt*vb*vl*vr);
+                        dist *= 0.65;
+                        
+                        // dist = distance(uv.xy , vec2(0.5,0.5));
+                    }
 
 
                     // Seed for the position noise        
@@ -240,7 +279,7 @@ export function initShader() {
                         // points[i] = vec2(0.1*float(i), 0.1*float(i));
                         // points[i] = u_points[i];
                         // points[i] = vec2((random(seed))*1.2-0.1, (random(seedY))*1.2-0.1);
-                        points[i] = texture(u_textureCoord, vec2((float(i)+0.5)/float(POINTS),0.1)).rg;
+                        points[i] = texture(u_textureCoord, vec2((float(i)+0.5)/float(POINTS),(u_imgCoordRow+0.5)/float(u_imgCoordN))).rg;
                         seed += vec2(.4);
                         seedY += vec2(.3);
                     }
@@ -310,6 +349,10 @@ export function initShader() {
 
                             vec2 uvDist = distort(uv*1.5-0.25, m.x+0.2*cnoise(uv*5.), -.5, m.yz);
                             // vec3 colorDist = mix(texture(u_texture, uvDist, -100.).rgb, texture(u_texture, uv, -100.).rgb, smoothstep(-1., 1., m.x*1.));
+
+                            // uvDist = vec2(uvDist.x+0.5,uvDist.y);
+                            // uv = vec2(uv.x+0.5,uv.y);
+
                             vec3 colorDist = texture(u_texture, uvDist, -100.).rgb;
 
 
@@ -338,8 +381,10 @@ export function initShader() {
                             // Highlight =  Highlight2;
                                 
                             colorDist = blur(uvDist, 1.);
-                            const vec2 lensRadius 	= vec2(1.1, 0.05);
-                            float dist = distance(uv.xy, vec2(0.5,0.5));
+                            const vec2 lensRadius 	= vec2(.9, 0.05);
+
+                            // float dist = distance(uv.xy , vec2(0.5,0.5));
+
                             // color -= dist;
                             float vigfin = 1. - pow(1.-smoothstep(lensRadius.x, lensRadius.y, dist),1.5);
                             colorDist = mix(colorDist, blur(uvDist, (1.-vigfin)*10.), 4.*(1.-vigfin));
@@ -349,14 +394,15 @@ export function initShader() {
                             color = clamp(color, 0.0, 1.0);
                             
                     // color = mix(color, colorDist, 0.1*(color.r+color.g+color.b)/3.0);
-                        
+                        // gl_FragColor=vec4(vec3(dist), 1.0);
 
                     // }
                     // color -= (1.-vigfin);
                     color -= vec3(.1 * (random(floor(2000000.*uv/u_resolution.y)) - .5));
                     // color = texture(u_texture, uv, -100.).rgb;
-                        }
+                    // color = vec3(dist);
                     
+                        }
                     gl_FragColor = vec4(color, 1.0);
                     
                 }
@@ -388,9 +434,10 @@ export function initShader() {
         width = window.innerWidth;
         height = window.innerHeight;
 
-        if (hl.context.isPreview) {
+        if (hl.context.previewMode) {
             canvas.width = 1.2 * height * texture.image.width / texture.image.height;
             canvas.height = height;
+            uniforms.u_square.value = false
         }
         else {
             if (texture.image.width > texture.image.height) {
@@ -400,8 +447,8 @@ export function initShader() {
             else {
                 canvas.width = height;
                 canvas.height = height;
-
             }
+            uniforms.u_square.value = true
         }
         uniforms.u_resolution = { value: new THREE.Vector2(canvas.width, canvas.height) };
         console.log(uniforms.u_resolution.value)
@@ -423,7 +470,7 @@ export function initShader() {
 
     const IMG_N = 50;
     let imageIdx = Math.floor(hl.random() * IMG_N);
-    // imageIdx = 1;
+    // imageIdx = 19;
     let imageName = `img/img${imageIdx + 1}.jpg`
     let imageCoordName = `imgCoord/imgCoord${imageIdx + 1}.png`
 
@@ -505,11 +552,8 @@ export function initShader() {
                     renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas, alpha: true, precision: "highp" });
                     renderer.setClearColor(0x000000, 0);
 
-                    setSize();
 
                     let seedImgVar = Math.floor(hl.random() * seeds[imageIdx].length);
-                    seedImgVar = 0;
-                    let seed = seeds[imageIdx][seedImgVar].slice()
 
                     let lum = getBrightness(texture);
                     uniforms = {
@@ -519,7 +563,12 @@ export function initShader() {
                         u_luminosity: { value: lum },
                         u_seed: { value: new THREE.Vector2(seeds[imageIdx][seedImgVar][0], seeds[imageIdx][seedImgVar][1]) },
                         u_textureCoord: { value: textureCoord },
+                        u_square: { value: false },
+                        u_imgCoordRow: { value: seedImgVar },
+                        u_imgCoordN: { value: seeds[imageIdx].length },
                     };
+
+                    setSize();
 
                     const material = new THREE.ShaderMaterial({
                         vertexShader: vertexShader,
