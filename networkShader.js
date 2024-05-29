@@ -193,24 +193,16 @@ export function initShader() {
                     return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
                 }
 
-                // // fisheye distortion
+                // fisheye distortion
                 vec2 distort(vec2 point, float radius, float intensity, vec2 center)
                 {
-                    // pos = 0.5 * (pos + 1.0);
-                    // pos += 0.1;
-
                     vec2 pos = point - center;
                     float theta = atan(pos.y, pos.x);
-                    // float theta = atan(pos.y, pos.x);
-                    // radius = pow(radius, intensity);
                     radius *= intensity;
                     pos.x = radius * cos(theta);
                     pos.y = radius * sin(theta);
 
                     return point + pos;
-
-                    // return 0.5 * (pos + 1.0);
-                    // return 2. * pos - 1.0;
                 }
 
                 vec3 blur(vec2 uv, float size){
@@ -228,11 +220,8 @@ export function initShader() {
                 void main() {
                     // Normalized pixel coordinates (from 0 to 1)
                     vec2 uv = gl_FragCoord.xy / u_resolution;
-                    // uv = 2.0 * uv - 1.0;
-                    // uv = 0.5 * (uv + 1.);
                     uv.x *= u_resolution.x / u_resolution.y;
 
-                    // float dist = distance(uv.xy , vec2(0.5,0.5));
                     float dist = 0.;
                     float vt = smoothstep(1.0-rt.x, 1.0-rt.y,uv.y);    
                     float vb = smoothstep(rt.x, rt.y,uv.y);
@@ -242,7 +231,6 @@ export function initShader() {
                     dist = 1.-(vt*vb*vl*vr);
                     dist *= 0.75;
 
-                    // uv.x -= 0.5;
                     ivec2 size = textureSize(u_texture, 0);
                     uv.x *= float(size.y) / float(size.x);
                     
@@ -261,16 +249,12 @@ export function initShader() {
 
                         dist = 1.-(vt*vb*vl*vr);
                         dist *= 0.65;
-                        
-                        // dist = distance(uv.xy , vec2(0.5,0.5));
                     }
 
 
                     // Seed for the position noise        
                     vec2 seed = vec2(u_seed.x);
                     vec2 seedY = vec2(u_seed.y);
-                    // vec2 seed = vec2(2.);
-                    // vec2 seedY = vec2(5.);
                             
                     // Centroids
                     vec2 points[POINTS];
@@ -340,23 +324,15 @@ export function initShader() {
                     //         color.rgb = vec3(0.,0.5,0.0);
                     // }
                     
-                    // use m.x as a radius for the fisheye distortion
-
-
-                    // if(uv.x <= 10.){
+                    
                         if(color.r > 0. )
                         {
-
+                            // use m.x as a radius for the fisheye distortion
                             vec2 uvDist = distort(uv*1.5-0.25, m.x+0.2*cnoise(uv*5.), -.5, m.yz);
-                            // vec3 colorDist = mix(texture(u_texture, uvDist, -100.).rgb, texture(u_texture, uv, -100.).rgb, smoothstep(-1., 1., m.x*1.));
-
-                            // uvDist = vec2(uvDist.x+0.5,uvDist.y);
-                            // uv = vec2(uv.x+0.5,uv.y);
-
                             vec3 colorDist = texture(u_texture, uvDist, -100.).rgb;
 
 
-                            vec3 colorNorm = texture(u_texture, uv, -100.).rgb;// * pow(colorDist+0.5, vec3(1.0));
+                            vec3 colorNorm = texture(u_texture, uv, -100.).rgb;
 
                             float Threshold = u_luminosity;
                             float Intensity = 3.5;
@@ -366,8 +342,7 @@ export function initShader() {
                             vec3 Highlight = clamp(blur(uvDist, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
                                 
                             colorNorm = blur(uv, 0.5);
-                            // colorNorm = mix(1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity), colorNorm,0.3*(0.2126*color.r+0.7152 *color.g+0.0722 * color.b)) ; //Screen Blend Mode
-                            colorNorm = 1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity) ; //Screen Blend Mode
+                            colorNorm = 1.0-(1.0-colorNorm)*(1.0-Highlight*Intensity) ; 
                             
 
                             Threshold = u_luminosity*1.5;
@@ -378,14 +353,10 @@ export function initShader() {
                             vec3 Highlight1 = clamp(blur(uv, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
                             vec3 Highlight2 = clamp(blur(uvDist, BlurSize)-Threshold,0.0,1.0)*1.0/(1.0-Threshold);
                             Highlight = max(Highlight1, Highlight2);
-                            // Highlight =  Highlight2;
                                 
                             colorDist = blur(uvDist, 1.);
                             const vec2 lensRadius 	= vec2(.9, 0.05);
 
-                            // float dist = distance(uv.xy , vec2(0.5,0.5));
-
-                            // color -= dist;
                             float vigfin = 1. - pow(1.-smoothstep(lensRadius.x, lensRadius.y, dist),1.5);
                             colorDist = mix(colorDist, blur(uvDist, (1.-vigfin)*10.), 4.*(1.-vigfin));
                             colorDist = 1.0-(1.0-colorDist)*(1.0-Highlight*Intensity);
@@ -393,14 +364,7 @@ export function initShader() {
                             color = mix(colorDist, colorNorm, smoothstep(.45, 0.55 , m.x));
                             color = clamp(color, 0.0, 1.0);
                             
-                    // color = mix(color, colorDist, 0.1*(color.r+color.g+color.b)/3.0);
-                        // gl_FragColor=vec4(vec3(dist), 1.0);
-
-                    // }
-                    // color -= (1.-vigfin);
-                    color -= vec3(.1 * (random(floor(2000000.*uv/u_resolution.y)) - .5));
-                    // color = texture(u_texture, uv, -100.).rgb;
-                    // color = vec3(dist);
+                            color -= vec3(.1 * (random(floor(2000000.*uv/u_resolution.y)) - .5));
                     
                         }
                     gl_FragColor = vec4(color, 1.0);
@@ -420,7 +384,6 @@ export function initShader() {
             for (let i = 0; i < imageData.data.length; i += 4) {
                 // luminosity
                 sum += 0.2126 * imageData.data[i] + 0.7152 * imageData.data[i + 1] + 0.0722 * imageData.data[i + 2];
-                // sum += (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
             }
             const luminosity = sum / (canvas2.width * canvas2.height) / 255;
             return luminosity
@@ -470,7 +433,6 @@ export function initShader() {
 
     const IMG_N = 50;
     let imageIdx = Math.floor(hl.random() * IMG_N);
-    // imageIdx = 19;
     let imageName = `img/img${imageIdx + 1}.jpg`
     let imageCoordName = `imgCoord/imgCoord${imageIdx + 1}.png`
 
@@ -536,10 +498,7 @@ export function initShader() {
 
     const loader = new THREE.TextureLoader()
 
-
-
     loader.load(
-        // url,
         imageName,
         function (loadedTexture) {
             loader.load(
